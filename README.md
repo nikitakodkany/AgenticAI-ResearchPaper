@@ -24,6 +24,8 @@ A fully automated multi-agent research assistant that retrieves academic papers,
 | Frontend            | Streamlit       |
 | Deployment          | Docker          |
 
+## 📽️ [Watch the demo video](recording.mp4)
+
 ## How It Works
 ### Step 1: Fetch Research Papers
 - The system queries ArXiv for academic papers related to the given topic.
