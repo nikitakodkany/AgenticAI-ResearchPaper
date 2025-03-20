@@ -24,56 +24,6 @@ A fully automated multi-agent research assistant that retrieves academic papers,
 | Frontend            | Streamlit       |
 | Deployment          | Docker          |
 
-## Installation & Setup
-### 1. Clone the Repository
-```bash
-git clone https://github.com/your-username/RAG-Research-Assistant.git
-cd RAG-Research-Assistant
-```
-
-### 2. Install Dependencies
-```bash
-pip install psycopg2-binary openai langchain langgraph pgvector fastapi streamlit arxiv numpy
-```
-
-### 3. Set Up PostgreSQL & pgvector
-Ensure PostgreSQL is installed and the `pgvector` extension is enabled.
-
-```bash
-psql -U postgres
-CREATE DATABASE research_db;
-\c research_db
-CREATE EXTENSION vector;
-```
-
-Run the database setup script:
-```bash
-python setup_db.py
-```
-
-### 4. Set API Keys
-Add your OpenAI API key and ArXiv API key to environment variables:
-```bash
-export OPENAI_API_KEY="your_openai_key"
-```
-
-## Running the System
-### 1. Store Research Papers
-Fetch papers from ArXiv, generate embeddings, and store them in pgvector.
-```bash
-python store_papers.py
-```
-
-### 2. Start the FastAPI Server
-```bash
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 3. Run the Streamlit UI
-```bash
-streamlit run app.py
-```
-
 ## How It Works
 ### Step 1: Fetch Research Papers
 - The system queries ArXiv for academic papers related to the given topic.
