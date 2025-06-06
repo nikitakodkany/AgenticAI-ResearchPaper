@@ -1,3 +1,0 @@
-"""
-Research workflow implementation package.
-""" 
