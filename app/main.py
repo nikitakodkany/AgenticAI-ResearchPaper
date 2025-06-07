@@ -1,4 +1,8 @@
-from fastapi import FastAPI, HTTPException, Request
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -46,15 +50,31 @@ class ResearchQuery(BaseModel):
     embedding_provider: str = "hf-all-MiniLM-L6-v2"
     llm_provider: str = "hf-mistral-7b"
     max_results: Optional[int] = settings.MAX_PAPERS_PER_QUERY
+    category: Optional[str] = None
+    year_range: Optional[List[int]] = None
 
 class ResearchResponse(BaseModel):
     query: str
     papers: List[Dict[str, Any]]
     analysis: str
 
+class AskRequest(BaseModel):
+    query: str
+    top_k: int = 3
+    vector_backend: str = "chroma"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    llm_provider: str = "hf-mistral-7b"
+    retrieval_source: str = "ArXiv"
+    year_range: List[int] = [2019, 2024]
+    topic_filter: List[str] = []
+
 @app.get("/")
 async def root():
     return {"message": "Research Assistant API"}
+
+@app.get("/api/v1/health")
+async def health_check():
+    return {"status": "healthy"}
 
 @app.post("/search", response_model=List[PaperResponse])
 async def search_papers(query: SearchQuery):
@@ -108,24 +128,24 @@ async def find_similar_papers(query: str, limit: int = 5):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ask")
-async def ask_question(arxiv_id: str, question: str):
+async def ask_question(request: AskRequest = Body(...)):
     try:
-        # Get paper and its summary
-        paper_results = paper_service.papers_collection.get(ids=[arxiv_id])
-        if not paper_results["ids"]:
-            raise HTTPException(status_code=404, detail="Paper not found")
-        
-        paper = paper_results["metadatas"][0]
-        summary = paper_service.get_paper_summary(arxiv_id)
-        
-        # Combine context
-        context = f"Title: {paper['title']}\nAbstract: {paper['abstract']}"
-        if summary:
-            context += f"\nSummary: {summary['summary']}\nKey Findings: {summary['key_findings']}"
-        
-        # Generate response
-        response = llm_service.generate_response(question, context)
-        return {"response": response}
+        papers = paper_service.search_papers(
+            request.query,
+            request.top_k
+        )
+        context = "\n\n".join([
+            f"Title: {p['title']}\nAuthors: {', '.join(p['authors'])}\nAbstract: {p['abstract']}\nURL: {p['url']}" for p in papers
+        ])
+        answer = llm_service.generate_response(request.query, context)
+        citations = [
+            {
+                "title": p["title"],
+                "abstract": p["abstract"],
+                "url": p["url"]
+            } for p in papers
+        ]
+        return {"answer": answer, "citations": citations}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -152,17 +172,17 @@ async def research_query(query: ResearchQuery):
     #     pass
     # ----------------------------------------------------------
 
-    # Search for relevant papers
-    papers = paper_service.search_papers(query.query, query.max_results)
-    # For demo, just use the first paper's abstract for analysis
-    context = "\n\n".join([
-        f"Title: {p['title']}\nAuthors: {', '.join(p['authors'])}\nAbstract: {p['abstract']}\nURL: {p['url']}" for p in papers
-    ])
-    analysis = llm_service.generate_response(query.query, context)
+    # Search for relevant papers with filters
+    papers = paper_service.search_papers(
+        query.query, 
+        query.max_results,
+        category=query.category,
+        year_range=query.year_range
+    )
     return {
         "query": query.query,
         "papers": papers,
-        "analysis": analysis
+        "analysis": ""  # Empty analysis
     }
 
 if __name__ == "__main__":

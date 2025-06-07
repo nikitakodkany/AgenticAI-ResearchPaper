@@ -14,5 +14,6 @@ class Settings:
     PROJECT_NAME = "RAG Research Assistant"
     # ArXiv Settings
     MAX_PAPERS_PER_QUERY = 10
+    API_URL = "http://localhost:8000"
 
 settings = Settings() 

@@ -6,6 +6,7 @@
 
 import chromadb
 from datetime import datetime
+import os
 from app.config import settings
 
 # --- PostgreSQL/pgvector/SQLAlchemy setup (commented out) ---
@@ -45,18 +46,24 @@ from app.config import settings
 #     Base.metadata.create_all(bind=engine)
 
 # --- ChromaDB setup (active) ---
-chroma_client = chromadb.PersistentClient(path=settings.CHROMA_PERSIST_DIRECTORY)
+# Ensure the directory exists
+os.makedirs(settings.CHROMA_PERSIST_DIRECTORY, exist_ok=True)
 
-# Create collections for papers and summaries
-papers_collection = chroma_client.get_or_create_collection(
-    name="research_papers",
-    metadata={"hnsw:space": "cosine"}
-)
+try:
+    # Initialize ChromaDB client
+    chroma_client = chromadb.PersistentClient(path=settings.CHROMA_PERSIST_DIRECTORY)
 
-summaries_collection = chroma_client.get_or_create_collection(
-    name="research_summaries",
-    metadata={"hnsw:space": "cosine"}
-)
+    # Create collections for papers and summaries with minimal configuration
+    papers_collection = chroma_client.get_or_create_collection(
+        name="research_papers"
+    )
+
+    summaries_collection = chroma_client.get_or_create_collection(
+        name="research_summaries"
+    )
+except Exception as e:
+    print(f"Error initializing ChromaDB: {str(e)}")
+    raise
 
 def get_db():
     """Get database session - not needed for ChromaDB but kept for API compatibility"""

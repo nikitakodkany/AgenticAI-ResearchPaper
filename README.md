@@ -1,80 +1,81 @@
-# RAG-Powered Research Assistant
+# Research Paper Search and Analysis Tool
 
-A sophisticated research assistant that leverages RAG (Retrieval-Augmented Generation) to help researchers find, analyze, and summarize academic papers.
+A powerful tool for searching, analyzing, and understanding research papers using AI. This application combines arXiv paper search with advanced AI capabilities to help researchers find and comprehend relevant papers more effectively.
 
 ## Features
 
-- Automated research paper fetching and processing
-- Vector embeddings generation using HuggingFace models (e.g., all-MiniLM-L6-v2)
-- Efficient similarity search using PostgreSQL with pgvector
-- Intelligent research summarization and compilation
-- Context-aware responses using RAG pipeline
-- User-friendly Streamlit interface
-- FastAPI backend for robust API endpoints
+### Paper Search
+- **Semantic Search**: Search papers using natural language queries
+- **Category Filtering**: Filter papers by specific research categories (e.g., Machine Learning, Computer Vision)
+- **Year Range Filtering**: Find papers published within specific years
+- **Result Limit Control**: Control the number of papers returned per search
 
-## Tech Stack
+### AI-Powered Analysis
+- **Paper Summarization**: Get concise summaries of research papers
+- **Key Findings Extraction**: Identify main contributions and findings
+- **Methodology Analysis**: Understand the research approach and methods used
+- **Similar Paper Discovery**: Find related papers based on content similarity
 
-- LangChain & LangGraph for agent orchestration
-- HuggingFace Transformers for embeddings and text generation
-- PostgreSQL with pgvector for vector storage
-- FastAPI for backend API
-- Streamlit for frontend interface
+### Technical Stack
+- **Vector Store**: Chroma for efficient paper storage and retrieval
+- **Embedding Provider**: HuggingFace (all-MiniLM-L6-v2) for semantic embeddings
+- **LLM Provider**: HuggingFace (mistralai/Mistral-7B-Instruct-v0.2) for text analysis
 
 ## Setup
 
-1. Clone the repository
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Set up PostgreSQL with pgvector extension
-5. Configuration is hardcoded in `app/config.py` (no .env file needed)
-6. Initialize the database:
-   ```bash
-   python scripts/init_db.py
-   ```
-7. Start the FastAPI backend:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-8. Start the Streamlit frontend:
-   ```bash
-   streamlit run app/frontend/app.py
-   ```
-
-## Project Structure
-
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/AgenticAI-ResearchPaper.git
+cd AgenticAI-ResearchPaper
 ```
-.
-├── app/
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Configuration settings
-│   ├── database.py          # Database connection and models
-│   ├── agents/              # LangChain agents
-│   ├── services/            # Business logic
-│   └── frontend/            # Streamlit UI
-├── scripts/
-│   └── init_db.py          # Database initialization
-├── tests/                   # Test files
-├── requirements.txt         # Project dependencies
-└── README.md               # Project documentation
+
+2. Create and activate a virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Start the backend server:
+```bash
+uvicorn app.main:app --reload
+```
+
+5. In a new terminal, start the frontend:
+```bash
+streamlit run app/frontend/app.py
 ```
 
 ## Usage
 
-1. Access the Streamlit interface at `http://localhost:8501`
-2. Enter your research query or topic of interest
-3. The system will:
-   - Search for relevant papers
-   - Generate embeddings
-   - Retrieve similar content
-   - Provide context-aware responses
+1. Open your browser and navigate to `http://localhost:8501`
+2. Enter your research query in the search box
+3. (Optional) Select a category to filter results
+4. (Optional) Set a year range for papers
+5. (Optional) Adjust the number of results to return
+6. Click "Search" to find relevant papers
+7. Click on any paper to view its details and get an AI-generated analysis
+
+## API Endpoints
+
+- `GET /api/v1/health`: Check API health status
+- `POST /api/v1/research`: Search for papers with the following parameters:
+  - `query`: Search query string
+  - `vector_backend`: Vector store backend (default: Chroma)
+  - `embedding_provider`: Embedding model provider
+  - `llm_provider`: LLM provider for analysis
+  - `max_results`: Maximum number of papers to return
+  - `category`: Paper category filter
+  - `year_range`: [start_year, end_year] filter
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT License 
+This project is licensed under the MIT License - see the LICENSE file for details. 
