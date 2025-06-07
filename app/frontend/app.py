@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 
 # Version
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # Configuration
 API_URL = "http://localhost:8000/api/v1"
@@ -117,6 +117,12 @@ PAPER_CATEGORIES = [
     "Trading and Market Microstructure"
 ]
 
+# Initialize session state for storing search history and metrics
+if 'search_history' not in st.session_state:
+    st.session_state.search_history = []
+if 'evaluation_metrics' not in st.session_state:
+    st.session_state.evaluation_metrics = {}
+
 def main():
     st.set_page_config(
         page_title="RAG Research Assistant",
@@ -124,97 +130,136 @@ def main():
         layout="wide"
     )
 
-    st.title("🔍 RAG Research Assistant")
-    st.caption(f"Version {VERSION}")
-    st.markdown("""
-    This assistant helps you find and analyze research papers using RAG (Retrieval-Augmented Generation).
-    Enter your research query below to get started.
-    """)
-
-    # Sidebar
+    st.title("🔍 Research Paper Search")
+    st.caption(f"v{VERSION}")
+    
+    # Sidebar for filters and metrics
     with st.sidebar:
-        st.markdown("## ℹ️ About")
-        st.markdown("""
-        This research assistant uses:
-        - LangChain & LangGraph for agent orchestration
-        - HuggingFace or OpenAI for embeddings and text generation
-        - Chroma or PostgreSQL with pgvector for vector storage
-        - RAG pipeline for context-aware responses
-        """)
-        # Backend selection
-        backend_label = st.selectbox("Vector Backend", list(BACKEND_OPTIONS.keys()), index=0)
-        backend = BACKEND_OPTIONS[backend_label]
-        # Embedding provider/model selection
-        embedding_label = st.selectbox("Embedding Provider", list(EMBEDDING_OPTIONS.keys()), index=0)
-        embedding_provider = EMBEDDING_OPTIONS[embedding_label]
-        # LLM provider/model selection
-        llm_label = st.selectbox("LLM Provider", list(LLM_OPTIONS.keys()), index=0)
-        llm_provider = LLM_OPTIONS[llm_label]
+        st.header("Filters & Metrics")
+        st.markdown("Search and analyze research papers using AI. Enter your query below to find relevant papers.")
         
-        # Filters
-        st.markdown("## 🔍 Filters")
-        selected_category = st.selectbox("Category", PAPER_CATEGORIES, index=0)
+        # Metadata Filters
+        st.subheader("Metadata Filters")
         year_range = st.slider(
             "Publication Year Range",
-            min_value=2015,
-            max_value=2025,
-            value=(2015, 2024)
-        )
-        max_papers = st.slider(
-            "Number of Papers",
-            min_value=1,
-            max_value=50,
-            value=10,
-            step=1
+            min_value=2010,
+            max_value=datetime.now().year,
+            value=(2020, datetime.now().year)
         )
         
-        # Health check
+        categories = [
+            "All",
+            "Machine Learning",
+            "Computer Vision",
+            "Natural Language Processing",
+            "Robotics",
+            "Artificial Intelligence",
+            "Neural Networks",
+            "Deep Learning"
+        ]
+        category = st.selectbox("Category", categories)
+        
+        # Number of papers and similarity threshold
+        max_results = st.slider("Number of papers", 1, 10, 3)
+        similarity_threshold = st.slider("Similarity Threshold", 0.0, 1.0, 0.7, 0.05)
+        
+        # Evaluation Metrics Display
+        st.subheader("Evaluation Metrics")
+        if st.session_state.evaluation_metrics:
+            metrics = st.session_state.evaluation_metrics
+            st.metric("Precision", f"{metrics.get('precision', 0):.2f}")
+            st.metric("Recall", f"{metrics.get('recall', 0):.2f}")
+            st.metric("F1 Score", f"{metrics.get('f1_score', 0):.2f}")
+            
+            # Display per-query metrics
+            st.subheader("Per-Query Metrics")
+            for query, metrics in metrics.get('per_query', {}).items():
+                with st.expander(f"Query: {query}"):
+                    st.write(f"Relevance Score: {metrics.get('relevance', 0):.2f}")
+                    st.write(f"Response Time: {metrics.get('response_time', 0):.2f}s")
+                    st.write(f"Chunks Retrieved: {metrics.get('chunks_retrieved', 0)}")
+        
+        # Health Check
         try:
-            health = requests.get(f"{API_URL}/health")
-            if health.status_code == 200:
+            response = requests.get(f"{API_URL}/health")
+            if response.status_code == 200:
                 st.success("API Status: Healthy")
             else:
                 st.error("API Status: Unhealthy")
         except:
             st.error("API Status: Unreachable")
-
-    # Research query input
-    query = st.text_input(
-        "Enter your research query",
-        placeholder="e.g., Recent advances in large language models"
-    )
-
+    
+    # Main content area
+    # Remove duplicate description here
+    # st.markdown("""
+    # Search and analyze research papers using AI. Enter your query below to find relevant papers.
+    # """)
+    
+    # Search input
+    query = st.text_input("Enter your research query", key="search_query")
+    
+    # Search button
     if st.button("Search", type="primary"):
         if query:
-            with st.spinner("Searching for relevant papers..."):
+            with st.spinner("Searching papers..."):
                 try:
+                    # Make API request
                     response = requests.post(
                         f"{API_URL}/research",
                         json={
                             "query": query,
-                            "vector_backend": backend,
-                            "embedding_provider": embedding_provider,
-                            "llm_provider": llm_provider,
-                            "category": selected_category if selected_category != "All" else None,
+                            "max_results": max_results,
+                            "category": category,
                             "year_range": year_range,
-                            "max_results": max_papers
+                            "similarity_threshold": similarity_threshold
                         }
                     )
-                    response.raise_for_status()
-                    result = response.json()
-
-                    # Clear previous results and display new ones
-                    with st.empty():
-                        st.markdown("## 📚 Relevant Papers")
-                        for paper in result["papers"]:
-                            with st.expander(f"📄 {paper['title']} ({paper['published_date'][:4]})"):
-                                st.markdown(f"**Abstract:** {paper['abstract']}")
-                                st.markdown(f"**URL:** [{paper['url']}]({paper['url']})")
-
-                except requests.exceptions.RequestException as e:
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        # Store search in history
+                        st.session_state.search_history.append({
+                            "query": query,
+                            "timestamp": datetime.now().isoformat(),
+                            "results_count": len(data.get("papers", [])),
+                            "metrics": data.get("metrics", {})
+                        })
+                        
+                        # Update evaluation metrics
+                        st.session_state.evaluation_metrics = data.get("metrics", {})
+                        
+                        # Display results
+                        st.subheader("Search Results")
+                        for paper in data.get("papers", []):
+                            with st.expander(f"{paper['title']} ({paper['published_date'][:4]})"):
+                                st.write("**Authors:**", ", ".join(paper["authors"]))
+                                st.write("**Abstract:**", paper["abstract"])
+                                st.write("**URL:**", paper["url"])
+                                
+                                # Display paper-specific metrics
+                                if "metrics" in paper:
+                                    st.write("**Relevance Score:**", f"{paper['metrics'].get('relevance', 0):.2f}")
+                                    st.write("**Chunk Count:**", paper['metrics'].get('chunk_count', 0))
+                                    st.write("**Embedding Quality:**", f"{paper['metrics'].get('embedding_quality', 0):.2f}")
+                    else:
+                        st.error("Error searching papers. Please try again.")
+                except Exception as e:
                     st.error(f"Error: {str(e)}")
         else:
-            st.warning("Please enter a research query.")
+            st.warning("Please enter a search query")
+    
+    # Search History
+    if st.session_state.search_history:
+        st.subheader("Search History")
+        for search in reversed(st.session_state.search_history):
+            with st.expander(f"Query: {search['query']} ({search['timestamp'][:10]})"):
+                st.write(f"Results found: {search['results_count']}")
+                if "metrics" in search:
+                    st.write("**Metrics:**")
+                    st.write(f"- Precision: {search['metrics'].get('precision', 0):.2f}")
+                    st.write(f"- Recall: {search['metrics'].get('recall', 0):.2f}")
+                    st.write(f"- F1 Score: {search['metrics'].get('f1_score', 0):.2f}")
 
 if __name__ == "__main__":
     main() 

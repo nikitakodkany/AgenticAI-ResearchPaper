@@ -1,14 +1,89 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import arxiv
 from datetime import datetime
-from app.database import papers_collection, summaries_collection
+from app.database import papers_collection, summaries_collection, normalize_vector, chunk_text
 from app.config import settings
+from sentence_transformers import SentenceTransformer
+import logging
+import json
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize the embedding model with fixed version
+EMBEDDING_MODEL_VERSION = "all-MiniLM-L6-v2"
+embedding_model = SentenceTransformer(EMBEDDING_MODEL_VERSION)
 
 class PaperService:
     def __init__(self):
         self.papers_collection = papers_collection
         self.summaries_collection = summaries_collection
+        self.top_k = 5  # Default number of results to retrieve
 
+    def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding for text using the configured model"""
+        try:
+            # Ensure consistent tokenization by using the same model
+            embedding = embedding_model.encode(text, normalize_embeddings=True)
+            return normalize_vector(embedding.tolist())
+        except Exception as e:
+            logger.error(f"Error generating embedding: {str(e)}")
+            return [0.0] * settings.VECTOR_DIMENSION
+            
+    def process_paper(self, paper: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Process paper into chunks with metadata"""
+        # Combine title and abstract for better context
+        full_text = f"{paper['title']} {paper['abstract']}"
+        
+        # Create chunks with semantic boundaries
+        chunks = chunk_text(full_text)
+        
+        processed_chunks = []
+        for i, chunk in enumerate(chunks):
+            # Generate embedding for chunk
+            embedding = self.generate_embedding(chunk)
+            
+            # Create metadata for context-aware ranking
+            metadata = {
+                "paper_id": paper["arxiv_id"],
+                "title": paper["title"],
+                "authors": json.dumps(paper["authors"]),
+                "published_date": paper["published_date"].isoformat(),
+                "chunk_index": i,
+                "total_chunks": len(chunks),
+                "year": paper["published_date"].year,
+                "category": paper.get("category", "unknown"),
+                "url": paper["url"]
+            }
+            
+            processed_chunks.append({
+                "id": f"{paper['arxiv_id']}_chunk_{i}",
+                "text": chunk,
+                "embedding": embedding,
+                "metadata": metadata
+            })
+            
+        return processed_chunks
+        
+    def store_paper(self, paper: Dict[str, Any], embedding: List[float]) -> None:
+        """Store paper in ChromaDB with proper chunking and metadata"""
+        try:
+            # Process paper into chunks
+            chunks = self.process_paper(paper)
+            
+            # Store each chunk
+            for chunk in chunks:
+                self.papers_collection.add(
+                    ids=[chunk["id"]],
+                    embeddings=[chunk["embedding"]],
+                    documents=[chunk["text"]],
+                    metadatas=[chunk["metadata"]]
+                )
+            logger.info(f"Stored paper {paper['arxiv_id']} in {len(chunks)} chunks")
+        except Exception as e:
+            logger.error(f"Error storing paper {paper['arxiv_id']}: {str(e)}")
+            
     def search_papers(
         self, 
         query: str, 
@@ -16,11 +91,11 @@ class PaperService:
         category: Optional[str] = None,
         year_range: Optional[List[int]] = None
     ) -> List[dict]:
-        """Search papers on arXiv"""
-        print(f"Searching papers with query: {query}")
-        print(f"Max results: {max_results}")
-        print(f"Category: {category}")
-        print(f"Year range: {year_range}")
+        """Search papers on arXiv with improved filtering and retrieval"""
+        logger.info(f"Searching papers with query: {query}")
+        logger.info(f"Max results: {max_results}")
+        logger.info(f"Category: {category}")
+        logger.info(f"Year range: {year_range}")
         
         # Map full category names to arXiv codes
         category_mapping = {
@@ -78,11 +153,11 @@ class PaperService:
             arxiv_code = category_mapping.get(category)
             if arxiv_code:
                 query = f"cat:{arxiv_code} AND {query}"
-                print(f"Modified query with category: {query}")
+                logger.info(f"Modified query with category: {query}")
             
         # If year range is specified, fetch more papers to account for filtering
         search_max_results = max_results * 10 if year_range else max_results
-        print(f"Fetching {search_max_results} papers initially")
+        logger.info(f"Fetching {search_max_results} papers initially")
             
         search = arxiv.Search(
             query=query,
@@ -104,7 +179,7 @@ class PaperService:
             if year_range:
                 if not (year_range[0] <= paper_year <= year_range[1]):
                     filtered_out += 1
-                    print(f"Filtered out paper from year {paper_year}")
+                    logger.info(f"Filtered out paper from year {paper_year}")
                     continue
                     
             paper = {
@@ -113,23 +188,32 @@ class PaperService:
                 "abstract": result.summary,
                 "arxiv_id": result.entry_id.split('/')[-1],
                 "published_date": result.published,
-                "url": result.entry_id
+                "url": result.entry_id,
+                "category": category if category else "unknown"
             }
+            
+            # Store paper in ChromaDB with proper chunking and metadata
+            try:
+                self.store_paper(paper, None)  # Embedding will be generated in process_paper
+                logger.info(f"Stored paper in ChromaDB: {paper['title']}")
+            except Exception as e:
+                logger.error(f"Error storing paper in ChromaDB: {str(e)}")
+            
             papers.append(paper)
-            print(f"Added paper: {paper['title']} ({paper['published_date'].year})")
+            logger.info(f"Added paper: {paper['title']} ({paper['published_date'].year})")
             
             # Stop if we have enough papers after filtering
             if len(papers) >= max_results:
                 break
                 
-        print(f"Total papers fetched: {total_fetched}")
-        print(f"Papers filtered out by year: {filtered_out}")
-        print(f"Years seen in results: {sorted(years_seen)}")
-        print(f"Final number of papers: {len(papers)}")
+        logger.info(f"Total papers fetched: {total_fetched}")
+        logger.info(f"Papers filtered out by year: {filtered_out}")
+        logger.info(f"Years seen in results: {sorted(years_seen)}")
+        logger.info(f"Final number of papers: {len(papers)}")
         
         # If we couldn't find enough papers in the year range, try without year filtering
         if year_range and len(papers) < max_results:
-            print("Not enough papers found in year range, falling back to all years")
+            logger.info("Not enough papers found in year range, falling back to all years")
             papers = []
             total_fetched = 0
             for result in search.results():
@@ -140,34 +224,27 @@ class PaperService:
                     "abstract": result.summary,
                     "arxiv_id": result.entry_id.split('/')[-1],
                     "published_date": result.published,
-                    "url": result.entry_id
+                    "url": result.entry_id,
+                    "category": category if category else "unknown"
                 }
+                
+                # Store paper in ChromaDB
+                try:
+                    self.store_paper(paper, None)
+                    logger.info(f"Stored paper in ChromaDB (fallback): {paper['title']}")
+                except Exception as e:
+                    logger.error(f"Error storing paper in ChromaDB: {str(e)}")
+                
                 papers.append(paper)
-                print(f"Added paper (fallback): {paper['title']} ({paper['published_date'].year})")
+                logger.info(f"Added paper (fallback): {paper['title']} ({paper['published_date'].year})")
                 
                 if len(papers) >= max_results:
                     break
                     
-            print(f"Fallback - Total papers fetched: {total_fetched}")
-            print(f"Fallback - Final number of papers: {len(papers)}")
+            logger.info(f"Fallback - Total papers fetched: {total_fetched}")
+            logger.info(f"Fallback - Final number of papers: {len(papers)}")
             
         return papers
-
-    def store_paper(self, paper: dict, embedding: List[float]) -> str:
-        """Store paper in ChromaDB"""
-        paper_id = paper["arxiv_id"]
-        self.papers_collection.add(
-            ids=[paper_id],
-            embeddings=[embedding],
-            metadatas=[{
-                "title": paper["title"],
-                "authors": ", ".join(paper["authors"]),
-                "abstract": paper["abstract"],
-                "published_date": paper["published_date"].isoformat(),
-                "url": paper["url"]
-            }]
-        )
-        return paper_id
 
     def store_summary(self, paper_id: str, summary: dict, embedding: List[float]) -> str:
         """Store paper summary in ChromaDB"""
@@ -184,21 +261,33 @@ class PaperService:
         )
         return summary_id
 
-    def search_similar_papers(self, query_embedding: List[float], limit: int = 5) -> List[dict]:
-        """Search for similar papers using vector similarity"""
-        results = self.papers_collection.query(
-            query_embeddings=[query_embedding],
-            n_results=limit
-        )
-        
-        papers = []
-        for i in range(len(results["ids"][0])):
-            paper = {
-                "arxiv_id": results["ids"][0][i],
-                **results["metadatas"][0][i]
-            }
-            papers.append(paper)
-        return papers
+    def search_similar_papers(self, query: str, top_k: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Search for similar papers using semantic search"""
+        try:
+            # Generate query embedding
+            query_embedding = self.generate_embedding(query)
+            
+            # Search with metadata filters
+            results = self.papers_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k or self.top_k,
+                include=["documents", "metadatas", "distances"]
+            )
+            
+            # Process results
+            similar_papers = []
+            for i in range(len(results["ids"][0])):
+                paper = {
+                    "text": results["documents"][0][i],
+                    "metadata": results["metadatas"][0][i],
+                    "similarity": 1 - results["distances"][0][i]  # Convert distance to similarity
+                }
+                similar_papers.append(paper)
+                
+            return similar_papers
+        except Exception as e:
+            logger.error(f"Error in semantic search: {str(e)}")
+            return []
 
     def get_paper_summary(self, paper_id: str) -> Optional[dict]:
         """Get paper summary from ChromaDB"""
