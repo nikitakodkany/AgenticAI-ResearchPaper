@@ -179,11 +179,17 @@ async def research_query(query: ResearchQuery):
         category=query.category,
         year_range=query.year_range
     )
-    return {
+    response = {
         "query": query.query,
         "papers": papers,
-        "analysis": ""  # Empty analysis
+        "metrics": {
+            "precision": "N/A",
+            "recall": "N/A",
+            "f1_score": "N/A",
+            "per_query": {}
+        }
     }
+    return response
 
 if __name__ == "__main__":
     import uvicorn

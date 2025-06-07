@@ -11,6 +11,22 @@ from app.config import settings
 import numpy as np
 from typing import List, Dict, Any
 import logging
+import spacy
+from transformers import AutoTokenizer
+
+# Load spaCy model for sentence splitting
+try:
+    nlp = spacy.load("en_core_web_sm")
+    use_spacy = True
+except Exception:
+    import nltk
+    nltk.download('punkt')
+    from nltk.tokenize import sent_tokenize
+    use_spacy = False
+
+# Load HuggingFace tokenizer for the embedding model
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+tokenizer = AutoTokenizer.from_pretrained(EMBEDDING_MODEL_NAME)
 
 # --- PostgreSQL/pgvector/SQLAlchemy setup (commented out) ---
 # DATABASE_URL = settings.DATABASE_URL
@@ -64,39 +80,44 @@ def normalize_vector(vector: List[float]) -> List[float]:
         return vector.tolist()
     return (vector / norm).tolist()
 
-def chunk_text(text: str, max_chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-    """Semantic chunking of text with overlap"""
-    # Split into sentences first
-    sentences = text.split('. ')
+def chunk_text(text: str, max_tokens: int = 256, overlap_tokens: int = 30) -> list:
+    """Chunk text into overlapping segments using tokenizer, with robust sentence splitting."""
+    # Sentence splitting
+    if use_spacy:
+        sentences = [sent.text.strip() for sent in nlp(text).sents]
+    else:
+        sentences = sent_tokenize(text)
+
     chunks = []
     current_chunk = []
-    current_size = 0
-    
-    for sentence in sentences:
-        sentence = sentence.strip() + '. '
-        sentence_size = len(sentence)
-        
-        if current_size + sentence_size > max_chunk_size and current_chunk:
-            # Join current chunk and add to chunks
-            chunks.append(' '.join(current_chunk))
-            # Keep last few sentences for overlap
-            overlap_sentences = []
-            overlap_size = 0
-            for s in reversed(current_chunk):
-                if overlap_size + len(s) <= overlap:
-                    overlap_sentences.insert(0, s)
-                    overlap_size += len(s)
-                else:
-                    break
-            current_chunk = overlap_sentences
-            current_size = overlap_size
+    current_tokens = 0
+    sentence_tokens = [len(tokenizer.encode(sent, add_special_tokens=False)) for sent in sentences]
+
+    i = 0
+    while i < len(sentences):
+        sent = sentences[i]
+        sent_len = sentence_tokens[i]
+        if current_tokens + sent_len > max_tokens and current_chunk:
+            # Finalize current chunk
+            chunk_text = " ".join(current_chunk)
+            chunks.append(chunk_text)
+            # Overlap: last N tokens (by sentences)
+            overlap_count = 0
+            overlap_chunk = []
+            j = len(current_chunk) - 1
+            while j >= 0 and overlap_count < overlap_tokens:
+                overlap_chunk.insert(0, current_chunk[j])
+                overlap_count += len(tokenizer.encode(current_chunk[j], add_special_tokens=False))
+                j -= 1
+            current_chunk = overlap_chunk
+            current_tokens = sum(len(tokenizer.encode(s, add_special_tokens=False)) for s in current_chunk)
         else:
-            current_chunk.append(sentence)
-            current_size += sentence_size
-    
+            current_chunk.append(sent)
+            current_tokens += sent_len
+            i += 1
     if current_chunk:
-        chunks.append(' '.join(current_chunk))
-    
+        chunk_text = " ".join(current_chunk)
+        chunks.append(chunk_text)
     return chunks
 
 try:

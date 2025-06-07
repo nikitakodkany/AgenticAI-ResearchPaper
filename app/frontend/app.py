@@ -136,8 +136,19 @@ def main():
     # Sidebar for filters and metrics
     with st.sidebar:
         st.header("Filters & Metrics")
-        st.markdown("Search and analyze research papers using AI. Enter your query below to find relevant papers.")
-        
+        # About section
+        st.markdown("""
+        **About**  
+        This app lets you search and analyze research papers using AI.  
+        - **Vector DB:** Chroma (selectable)
+        - **Embedding:** all-MiniLM-L6-v2 (selectable)
+        - **LLM:** Mistral-7B (selectable)
+        Filters, evaluation metrics, and advanced controls are available below.
+        """)
+        # Provider dropdowns
+        backend_label = st.selectbox("Vector Database", ["Chroma", "Pinecone", "Weaviate", "Milvus", "Qdrant", "FAISS", "Elasticsearch", "Redis", "PostgreSQL", "MongoDB"], index=0)
+        embedding_label = st.selectbox("Embedding Provider", ["all-MiniLM-L6-v2", "BAAI/bge-small-en", "all-mpnet-base-v2", "text-embedding-ada-002", "embed-english-v3.0"], index=0)
+        llm_label = st.selectbox("LLM Provider", ["Mistral-7B", "Llama-2-7b-chat-hf", "gpt-3.5-turbo", "gpt-4", "claude-2", "command"], index=0)
         # Metadata Filters
         st.subheader("Metadata Filters")
         year_range = st.slider(
@@ -146,7 +157,6 @@ def main():
             max_value=datetime.now().year,
             value=(2020, datetime.now().year)
         )
-        
         categories = [
             "All",
             "Machine Learning",
@@ -158,11 +168,9 @@ def main():
             "Deep Learning"
         ]
         category = st.selectbox("Category", categories)
-        
         # Number of papers and similarity threshold
         max_results = st.slider("Number of papers", 1, 10, 3)
         similarity_threshold = st.slider("Similarity Threshold", 0.0, 1.0, 0.7, 0.05)
-        
         # Evaluation Metrics Display
         st.subheader("Evaluation Metrics")
         if st.session_state.evaluation_metrics:
@@ -170,15 +178,12 @@ def main():
             st.metric("Precision", f"{metrics.get('precision', 0):.2f}")
             st.metric("Recall", f"{metrics.get('recall', 0):.2f}")
             st.metric("F1 Score", f"{metrics.get('f1_score', 0):.2f}")
-            
-            # Display per-query metrics
             st.subheader("Per-Query Metrics")
             for query, metrics in metrics.get('per_query', {}).items():
                 with st.expander(f"Query: {query}"):
                     st.write(f"Relevance Score: {metrics.get('relevance', 0):.2f}")
                     st.write(f"Response Time: {metrics.get('response_time', 0):.2f}s")
                     st.write(f"Chunks Retrieved: {metrics.get('chunks_retrieved', 0)}")
-        
         # Health Check
         try:
             response = requests.get(f"{API_URL}/health")
@@ -211,7 +216,10 @@ def main():
                             "max_results": max_results,
                             "category": category,
                             "year_range": year_range,
-                            "similarity_threshold": similarity_threshold
+                            "similarity_threshold": similarity_threshold,
+                            "vector_backend": backend_label,
+                            "embedding_provider": embedding_label,
+                            "llm_provider": llm_label
                         }
                     )
                     
