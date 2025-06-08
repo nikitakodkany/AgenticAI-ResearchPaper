@@ -1,4 +1,4 @@
-# Research Paper Search and Analysis Tool (v1.1.0)
+# Research Paper Search and Analysis Tool (v1.2.0)
 
 A modern, AI-powered app to search, filter, and analyze research papers with advanced vector search, metadata filters, and evaluation metrics.
 
@@ -9,6 +9,7 @@ A modern, AI-powered app to search, filter, and analyze research papers with adv
 - **Evaluation Metrics**: View overall and per-query metrics (precision, recall, F1 score, relevance, response time, chunk count).
 - **Search History**: See your previous queries and their results.
 - **Modern Sidebar UI**: All controls, filters, and metrics are organized in a clean sidebar, with a concise About section.
+- **Query Evaluation**: Automatic evaluation of search results using exact match metrics.
 
 ## About
 

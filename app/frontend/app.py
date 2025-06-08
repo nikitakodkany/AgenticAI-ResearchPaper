@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 
 # Version
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 # Configuration
 API_URL = "http://localhost:8000/api/v1"
