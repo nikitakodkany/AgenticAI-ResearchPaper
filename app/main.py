@@ -10,6 +10,7 @@ from app.services.paper_service import PaperService
 from app.services.embedding_service import EmbeddingService
 from app.services.llm_service import LLMService
 from app.config import settings
+from app.services.evaluation_service import EvaluationService
 
 app = FastAPI(title="Research Assistant API")
 
@@ -26,6 +27,7 @@ app.add_middleware(
 paper_service = PaperService()
 embedding_service = EmbeddingService()
 llm_service = LLMService()
+evaluation_service = EvaluationService()
 
 class SearchQuery(BaseModel):
     query: str
@@ -56,7 +58,13 @@ class ResearchQuery(BaseModel):
 class ResearchResponse(BaseModel):
     query: str
     papers: List[Dict[str, Any]]
-    analysis: str
+    analysis: Optional[str] = "Analysis not available"
+    metrics: Optional[Dict[str, Any]] = {
+        "precision": "N/A",
+        "recall": "N/A",
+        "f1_score": "N/A",
+        "per_query": {}
+    }
 
 class AskRequest(BaseModel):
     query: str
@@ -67,6 +75,12 @@ class AskRequest(BaseModel):
     retrieval_source: str = "ArXiv"
     year_range: List[int] = [2019, 2024]
     topic_filter: List[str] = []
+
+class QueryRequest(BaseModel):
+    query: str
+    num_papers: int = 5
+    category: Optional[str] = None
+    year_range: Optional[List[int]] = None
 
 @app.get("/")
 async def root():
@@ -160,18 +174,6 @@ async def research_query(query: ResearchQuery):
     embedding_service = EmbeddingService()
     llm_service = LLMService()
 
-    # --- For future use: Uncomment to support OpenAI/pgvector ---
-    # if query.vector_backend == "pgvector":
-    #     # Use PostgreSQL/pgvector logic here
-    #     pass
-    # if query.embedding_provider.startswith("openai"):
-    #     # Use OpenAI embeddings logic here
-    #     pass
-    # if query.llm_provider.startswith("openai"):
-    #     # Use OpenAI LLM logic here
-    #     pass
-    # ----------------------------------------------------------
-
     # Search for relevant papers with filters
     papers = paper_service.search_papers(
         query.query, 
@@ -179,9 +181,11 @@ async def research_query(query: ResearchQuery):
         category=query.category,
         year_range=query.year_range
     )
+    
     response = {
         "query": query.query,
         "papers": papers,
+        "analysis": "Analysis not available",
         "metrics": {
             "precision": "N/A",
             "recall": "N/A",
@@ -190,6 +194,13 @@ async def research_query(query: ResearchQuery):
         }
     }
     return response
+
+@app.post("/query")
+async def query(request: QueryRequest):
+    # ... existing code ...
+    response = await paper_service.search_papers(request.query, request.num_papers, request.category, request.year_range)
+    metrics = evaluation_service.evaluate_response(request.query, response)
+    return {"response": response, "metrics": metrics}
 
 if __name__ == "__main__":
     import uvicorn

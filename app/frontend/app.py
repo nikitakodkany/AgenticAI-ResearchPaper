@@ -263,11 +263,23 @@ def main():
         for search in reversed(st.session_state.search_history):
             with st.expander(f"Query: {search['query']} ({search['timestamp'][:10]})"):
                 st.write(f"Results found: {search['results_count']}")
-                if "metrics" in search:
-                    st.write("**Metrics:**")
-                    st.write(f"- Precision: {search['metrics'].get('precision', 0):.2f}")
-                    st.write(f"- Recall: {search['metrics'].get('recall', 0):.2f}")
-                    st.write(f"- F1 Score: {search['metrics'].get('f1_score', 0):.2f}")
+                if search.get('metrics'):
+                    st.subheader("Search Metrics")
+                    metrics = search['metrics']
+                    
+                    # Helper function to format metric value
+                    def format_metric(value):
+                        if isinstance(value, (int, float)):
+                            return f"{value:.2f}"
+                        return str(value)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Precision", format_metric(metrics.get('precision', 'N/A')))
+                    with col2:
+                        st.metric("Recall", format_metric(metrics.get('recall', 'N/A')))
+                    with col3:
+                        st.metric("F1 Score", format_metric(metrics.get('f1_score', 'N/A')))
 
 if __name__ == "__main__":
     main() 
