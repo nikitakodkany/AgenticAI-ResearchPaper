@@ -1,6 +1,6 @@
-# Research Paper Search and Analysis Tool (v1.2.0)
+# CiteMind
 
-A modern, AI-powered app to search, filter, and analyze research papers with advanced vector search, metadata filters, and evaluation metrics.
+Research Paper Search and Analysis Tool (v1.2.0) - A modern, AI-powered app to search, filter, and analyze research papers with advanced vector search, metadata filters, and evaluation metrics.
 
 ## Features
 
