@@ -57,3 +57,17 @@ Pull requests and issues are welcome!
 
 ## License
 MIT 
+
+## Langchain and Langraph Integration
+
+This project integrates Langchain and Langraph agents to enhance the research paper search and analysis capabilities.
+
+### Langchain
+- **AgentExecutor**: Utilized to manage the execution of various tools and functions within the research agent.
+- **Tools**: Includes tools for searching and fetching research papers, leveraging Langchain's capabilities.
+
+### Langraph
+- **StateGraph**: Used to create complex workflows for research tasks, allowing for structured and efficient processing of queries.
+- **Nodes and Edges**: Defines nodes for searching, analyzing, and summarizing papers, with edges connecting them in a logical workflow.
+
+These integrations allow for more advanced and flexible handling of research queries, providing users with detailed analyses and summaries of relevant papers. 
